@@ -22,7 +22,8 @@
 #include <filament/Engine.h>
 
 #include <camutils/Manipulator.h>
-
+#include <math/vec3.h>
+#include <math/mat4.h>
 struct Config {
     std::string title;
     std::string iblDirectory;
@@ -31,6 +32,11 @@ struct Config {
     bool splitView = false;
     filament::Engine::Backend backend = filament::Engine::Backend::OPENGL;
     filament::camutils::Mode cameraMode = filament::camutils::Mode::ORBIT;
+    filament::math::mat4f origin_camera_pose;
+    filament::math::float3 eye_position{0,4,0};
+    filament::math::float3 target_position{0,0,-4};
+    filament::math::float3 up_vec{0,1,0};
+
     bool resizeable = true;
     bool headless = false;
 };

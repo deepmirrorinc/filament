@@ -64,7 +64,7 @@ Cube::Cube(Engine& engine, filament::Material const* material, float3 linearColo
     mIndexBuffer = IndexBuffer::Builder()
             .indexCount(12*2 + 3*2*6)
             .build(engine);
-
+    
     if (mMaterial) {
         mMaterialInstanceSolid = mMaterial->createInstance();
         mMaterialInstanceWireFrame = mMaterial->createInstance();

@@ -16,8 +16,8 @@
 
 #include <filagui/ImGuiExtensions.h>
 
-#include <imgui.h>
-#include <imgui_internal.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 #include <math/scalar.h>
 #include <math/vec3.h>

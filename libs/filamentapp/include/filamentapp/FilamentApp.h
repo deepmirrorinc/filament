@@ -23,16 +23,15 @@
 #include <unordered_map>
 #include <vector>
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 
 #include <filament/Engine.h>
 #include <filament/Viewport.h>
-
 #include <camutils/Manipulator.h>
-
+#include <filamentapp/Sphere.h>
 #include <utils/Path.h>
 #include <utils/Entity.h>
-
+#include <math/mat4.h>
 #include "Config.h"
 #include "IBL.h"
 
@@ -89,7 +88,7 @@ public:
     void setSidebarWidth(int width) { mSidebarWidth = width; }
     void setWindowTitle(const char* title) { mWindowTitle = title; }
     float& getCameraFocalLength() { return mCameraFocalLength; }
-
+    
     void addOffscreenView(filament::View* view) { mOffscreenViews.push_back(view); }
 
     size_t getSkippedFrameCount() const { return mSkippedFrames; }
@@ -107,6 +106,10 @@ public:
      * that have different executable paths compared to single-configuration generators, like Ninja.
      */
     static const utils::Path& getRootAssetsPath();
+
+    void getWindowSize(int* height,int* width);
+    filament::math::mat4f GetCameraPose();
+    filament::camutils::Manipulator<float>* GetManipulator();
 
 private:
     FilamentApp();
@@ -176,6 +179,7 @@ private:
             return mWindow;
         }
 
+
     private:
         void configureCamerasForWindow();
         void fixupMouseCoordinatesForHdpi(ssize_t& x, ssize_t& y) const;
@@ -209,17 +213,16 @@ private:
         ssize_t mLastY = 0;
 
         CView* mMouseEventTarget = nullptr;
-
         // Keep track of which view should receive a key's keyUp event.
         std::unordered_map<SDL_Scancode, CView*> mKeyEventTarget;
     };
-
     friend class Window;
+    std::unique_ptr<FilamentApp::Window> window;
     void initSDL();
 
     void loadIBL(const Config& config);
     void loadDirt(const Config& config);
-
+    
     filament::Engine* mEngine = nullptr;
     filament::Scene* mScene = nullptr;
     std::unique_ptr<IBL> mIBL;
@@ -227,6 +230,7 @@ private:
     bool mClosed = false;
     uint64_t mTime = 0;
 
+    std::shared_ptr<Sphere> morbitPoint;
     filament::Material const* mDefaultMaterial = nullptr;
     filament::Material const* mTransparentMaterial = nullptr;
     filament::Material const* mDepthMaterial = nullptr;

@@ -17,7 +17,12 @@ material {
         {
             type : float,
             name : reflectance
-        }
+        },
+	{
+            type : float,
+            name : pointSize
+        },
+
     ],
 }
 
@@ -28,5 +33,6 @@ fragment {
         material.metallic = materialParams.metallic;
         material.roughness = materialParams.roughness;
         material.reflectance = materialParams.reflectance;
+        gl_PointSize= materialParams.pointSize;
     }
 }

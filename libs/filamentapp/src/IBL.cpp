@@ -33,7 +33,7 @@
 
 #include <utils/Path.h>
 #include <filament/IndirectLight.h>
-
+#include <cstring>
 using namespace filament;
 using namespace image;
 using namespace filament::math;

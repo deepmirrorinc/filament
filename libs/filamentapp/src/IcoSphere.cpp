@@ -18,9 +18,9 @@
 
 #include <array>
 
-static constexpr float X = .525731112119133606f;
-static constexpr float Z = .850650808352039932f;
-static constexpr float N = 0.f;
+static constexpr float X = 0.525731112119133606F;
+static constexpr float Z = 0.850650808352039932F;
+static constexpr float N = 0.F;
 
 const IcoSphere::VertexList IcoSphere::sVertices = {
         { -X, N,  Z }, { X,  N,  Z }, { -X, N,  -Z }, { X,  N,  -Z },

@@ -18,9 +18,9 @@
 #define CAMUTILS_ORBIT_MANIPULATOR_H
 
 #include <camutils/Manipulator.h>
-
 #include <math/scalar.h>
 
+#include <iostream>
 #define MAX_PHI (F_PI / 2.0 - 0.001)
 
 namespace filament {
@@ -28,174 +28,199 @@ namespace camutils {
 
 using namespace filament::math;
 
-template<typename FLOAT>
+template <typename FLOAT>
 class OrbitManipulator : public Manipulator<FLOAT> {
-public:
-    using vec2 = filament::math::vec2<FLOAT>;
-    using vec3 = filament::math::vec3<FLOAT>;
-    using vec4 = filament::math::vec4<FLOAT>;
-    using Bookmark = filament::camutils::Bookmark<FLOAT>;
-    using Base = Manipulator<FLOAT>;
-    using Config = typename Base::Config;
+ public:
+  using vec2 = filament::math::vec2<FLOAT>;
+  using vec3 = filament::math::vec3<FLOAT>;
+  using vec4 = filament::math::vec4<FLOAT>;
+  using Bookmark = filament::camutils::Bookmark<FLOAT>;
+  using Base = Manipulator<FLOAT>;
+  using Config = typename Base::Config;
 
-    enum GrabState { INACTIVE, ORBITING, PANNING };
+  enum GrabState { INACTIVE, ORBITING, PANNING };
 
-    OrbitManipulator(Mode mode, const Config& props) : Base(mode, props) {
-        setProperties(props);
-        Base::mEye = Base::mProps.orbitHomePosition;
-        mPivot = Base::mTarget = Base::mProps.targetPosition;
+  OrbitManipulator(Mode mode, const Config& props) : Base(mode, props) {
+    setProperties(props);
+    Base::mEye = Base::mProps.orbitHomePosition;
+    Base::mTarget = Base::mProps.targetPosition;
+    FLOAT width = Base::mProps.viewport[0];
+    FLOAT height = Base::mProps.viewport[1];
+    mPivot = Base::mTarget;
+    // mPivot=Base::raycastFarPlane(width/2,height/2);
+    // std::cout<<"mPivot!!!!!!!!"<<mPivot.y<<std::endl;
+  }
+
+  void setProperties(const Config& props) override {
+    Config resolved = props;
+
+    if (resolved.orbitHomePosition == vec3(0)) {
+      resolved.orbitHomePosition = vec3(0, 0, 1);
     }
 
-    void setProperties(const Config& props) override {
-        Config resolved = props;
-
-        if (resolved.orbitHomePosition == vec3(0)) {
-            resolved.orbitHomePosition = vec3(0, 0, 1);
-        }
-
-        if (resolved.orbitSpeed == vec2(0)) {
-            resolved.orbitSpeed = vec2(0.01);
-        }
-
-        // By default, place the ground plane so that it aligns with the targetPosition position.
-        // This is used only when PANNING.
-        if (resolved.groundPlane == vec4(0)) {
-            const FLOAT d = length(resolved.targetPosition);
-            const vec3 n = normalize(resolved.orbitHomePosition - resolved.targetPosition);
-            resolved.groundPlane = vec4(n, -d);
-        }
-
-        Base::setProperties(resolved);
+    if (resolved.orbitSpeed == vec2(0)) {
+      resolved.orbitSpeed = vec2(0.01);
     }
 
-    void grabBegin(int x, int y, bool strafe) override {
-        mGrabState = strafe ? PANNING : ORBITING;
-        mGrabPivot = mPivot;
-        mGrabEye = Base::mEye;
-        mGrabTarget = Base::mTarget;
-        mGrabBookmark = getCurrentBookmark();
-        mGrabWinX = x;
-        mGrabWinY = y;
-        mGrabFar = Base::raycastFarPlane(x, y);
-        Base::raycast(x, y, &mGrabScene);
+    // By default, place the ground plane so that it aligns with the targetPosition position.
+    // This is used only when PANNING.
+    if (resolved.groundPlane == vec4(0)) {
+      const FLOAT d = length(resolved.targetPosition);
+      const vec3 n = normalize(resolved.orbitHomePosition - resolved.targetPosition);
+      resolved.groundPlane = vec4(n, -d);
     }
 
-    void grabUpdate(int x, int y) override {
-        const int delx = mGrabWinX - x;
-        const int dely = mGrabWinY - y;
+    Base::setProperties(resolved);
+  }
 
-        if (mGrabState == ORBITING) {
-            Bookmark bookmark = getCurrentBookmark();
+  const double ratio = 1.0;
+  void AdjustCoor(int& x, int& y) {
+    FLOAT width = Base::mProps.viewport[0];
+    FLOAT height = Base::mProps.viewport[1];
 
-            const FLOAT theta = delx * Base::mProps.orbitSpeed.x;
-            const FLOAT phi = dely * Base::mProps.orbitSpeed.y;
-            const FLOAT maxPhi = MAX_PHI;
+    x = width / 2 + ratio * ((0.5 + x) - width / 2);
+    y = height / 2 + ratio * ((0.5 + y) - height / 2);
+  }
+  void grabBegin(int x, int y, bool strafe) override {
+    // AdjustCoor(x, y);
+    mGrabState = strafe ? PANNING : ORBITING;
+    mGrabPivot = mPivot;
+    mGrabEye = Base::mEye;
+    mGrabTarget = Base::mTarget;
+    Base::raycast(x, y, &mGrabScene);
+    mGrabBookmark = getCurrentBookmark();
+    mGrabWinX = x;
+    mGrabWinY = y;
+    mGrabFar = Base::raycastFarPlane(x, y);
+    Base::mGrapPoint = mPivot;
+  }
 
-            bookmark.orbit.phi = clamp(mGrabBookmark.orbit.phi + phi, -maxPhi, +maxPhi);
-            bookmark.orbit.theta = mGrabBookmark.orbit.theta + theta;
+  void grabUpdate(int x, int y) override {
+    // AdjustCoor(x, y);
+    const int delx = mGrabWinX - x;
+    const int dely = mGrabWinY - y;
+    if (mGrabState == ORBITING) {
+      Bookmark bookmark = getCurrentBookmark();
 
-            jumpToBookmark(bookmark);
-        }
+      const FLOAT theta = delx * Base::mProps.orbitSpeed.x;
+      const FLOAT phi = dely * Base::mProps.orbitSpeed.y;
+      const FLOAT maxPhi = MAX_PHI;
 
-        if (mGrabState == PANNING) {
-            const FLOAT ulen = distance(mGrabScene, mGrabEye);
-            const FLOAT vlen = distance(mGrabFar, mGrabScene);
-            const vec3 translation = (mGrabFar - Base::raycastFarPlane(x, y)) * ulen / vlen;
-            mPivot = mGrabPivot + translation;
-            Base::mEye = mGrabEye + translation;
-            Base::mTarget = mGrabTarget + translation;
-        }
+      bookmark.orbit.phi = clamp(mGrabBookmark.orbit.phi + phi, -maxPhi, +maxPhi);
+      bookmark.orbit.theta = mGrabBookmark.orbit.theta + theta;
+      jumpToBookmark(bookmark);
     }
 
-    void grabEnd() override {
-        mGrabState = INACTIVE;
+    if (mGrabState == PANNING) {
+      vec3 start_point, end_point;
+      auto cur_eye = Base::mEye;
+      Base::mEye = mGrabEye;
+      auto cur_target = Base::mTarget;
+      Base::mTarget = mGrabTarget;
+      mPivot = mGrabPivot;
+      if (!Base::raycast(mGrabWinX, mGrabWinY, &start_point)) {
+        return;
+      }
+      if (!Base::raycast(x, y, &end_point)) {
+        return;
+      }
+
+      vec3 translation =
+          (start_point - end_point);  //(mGrabFar - Base::raycastFarPlane(x, y)) * ulen / vlen;
+      mPivot = mGrabPivot + translation;
+      Base::mEye = mGrabEye + translation;
+      Base::mTarget = mGrabTarget + translation;
     }
+    Base::mGrapPoint = mPivot;
+  }
 
-    void scroll(int x, int y, FLOAT scrolldelta) override {
-        const vec3 gaze = normalize(Base::mTarget - Base::mEye);
-        const vec3 movement = gaze * Base::mProps.zoomSpeed * -scrolldelta;
-        const vec3 v0 = mPivot - Base::mEye;
-        Base::mEye += movement;
-        Base::mTarget += movement;
-        const vec3 v1 = mPivot - Base::mEye;
+  void grabEnd() override { mGrabState = INACTIVE; }
 
-        // Check if the camera has moved past the point of interest.
-        if (dot(v0, v1) < 0) {
-            mFlipped = !mFlipped;
-        }
+  void scroll(int x, int y, FLOAT scrolldelta) override {
+    const vec3 gaze = normalize(Base::mTarget - Base::mEye);
+    vec3 movement = gaze * Base::mProps.zoomSpeed * -scrolldelta;
+    const vec3 v0 = mPivot - Base::mEye;
+    Base::mEye += movement;
+    Base::mTarget += movement;
+    const vec3 v1 = mPivot - Base::mEye;
+
+    // Check if the camera has moved past the point of interest.
+    if (dot(v0, v1) < 0) {
+      mFlipped = !mFlipped;
     }
+  }
 
-    Bookmark getCurrentBookmark() const override {
-        Bookmark bookmark;
-        bookmark.mode = Mode::ORBIT;
-        const vec3 pivotToEye = Base::mEye - mPivot;
-        const FLOAT d = length(pivotToEye);
-        const FLOAT x = pivotToEye.x / d;
-        const FLOAT y = pivotToEye.y / d;
-        const FLOAT z = pivotToEye.z / d;
+  Bookmark getCurrentBookmark() const override {
+    Bookmark bookmark;
+    bookmark.mode = Mode::ORBIT;
+    const vec3 pivotToEye = Base::mEye - mPivot;
+    const FLOAT d = length(pivotToEye);
+    const FLOAT x = pivotToEye.x / d;
+    const FLOAT y = pivotToEye.y / d;
+    const FLOAT z = pivotToEye.z / d;
 
-        bookmark.orbit.phi = asin(y);
-        bookmark.orbit.theta = atan2(x, z);
-        bookmark.orbit.distance = mFlipped ? -d : d;
-        bookmark.orbit.pivot = mPivot;
+    bookmark.orbit.phi = asin(y);
+    bookmark.orbit.theta = atan2(x, z);
+    bookmark.orbit.distance = mFlipped ? -d : d;
+    bookmark.orbit.pivot = mPivot;
 
-        const FLOAT fov = Base::mProps.fovDegrees * math::F_PI / 180.0;
-        const FLOAT halfExtent = d * tan(fov / 2.0);
-        const vec3 targetToEye = Base::mProps.groundPlane.xyz;
-        const vec3 uvec = cross(Base::mProps.upVector, targetToEye);
-        const vec3 vvec = cross(targetToEye, uvec);
-        const vec3 centerToTarget = mPivot - Base::mProps.targetPosition;
+    const FLOAT fov = Base::mProps.fovDegrees * math::F_PI / 180.0;
+    const FLOAT halfExtent = d * tan(fov / 2.0);
+    const vec3 targetToEye = Base::mProps.groundPlane.xyz;
+    const vec3 uvec = cross(Base::mProps.upVector, targetToEye);
+    const vec3 vvec = cross(targetToEye, uvec);
+    const vec3 centerToTarget = mPivot - Base::mProps.targetPosition;
 
-        bookmark.map.extent = halfExtent * 2;
-        bookmark.map.center.x = dot(uvec, centerToTarget);
-        bookmark.map.center.y = dot(vvec, centerToTarget);
+    bookmark.map.extent = halfExtent * 2;
+    bookmark.map.center.x = dot(uvec, centerToTarget);
+    bookmark.map.center.y = dot(vvec, centerToTarget);
 
-        return bookmark;
-    }
+    return bookmark;
+  }
 
-    Bookmark getHomeBookmark() const override {
-        Bookmark bookmark;
-        bookmark.mode = Mode::ORBIT;
-        bookmark.orbit.phi = FLOAT(0);
-        bookmark.orbit.theta = FLOAT(0);
-        bookmark.orbit.pivot = Base::mProps.targetPosition;
-        bookmark.orbit.distance = distance(Base::mProps.targetPosition, Base::mProps.orbitHomePosition);
+  Bookmark getHomeBookmark() const override {
+    Bookmark bookmark;
+    bookmark.mode = Mode::ORBIT;
+    bookmark.orbit.phi = FLOAT(0);
+    bookmark.orbit.theta = FLOAT(0);
+    bookmark.orbit.pivot = Base::mProps.targetPosition;
+    bookmark.orbit.distance = distance(Base::mProps.targetPosition, Base::mProps.orbitHomePosition);
 
-        const FLOAT fov = Base::mProps.fovDegrees * math::F_PI / 180.0;
-        const FLOAT halfExtent = bookmark.orbit.distance * tan(fov / 2.0);
+    const FLOAT fov = Base::mProps.fovDegrees * math::F_PI / 180.0;
+    const FLOAT halfExtent = bookmark.orbit.distance * tan(fov / 2.0);
 
-        bookmark.map.extent = halfExtent * 2;
-        bookmark.map.center.x = 0;
-        bookmark.map.center.y = 0;
+    bookmark.map.extent = halfExtent * 2;
+    bookmark.map.center.x = 0;
+    bookmark.map.center.y = 0;
 
-        return bookmark;
-    }
+    return bookmark;
+  }
 
-    void jumpToBookmark(const Bookmark& bookmark) override {
-        mPivot = bookmark.orbit.pivot;
-        const FLOAT x = sin(bookmark.orbit.theta) * cos(bookmark.orbit.phi);
-        const FLOAT y = sin(bookmark.orbit.phi);
-        const FLOAT z = cos(bookmark.orbit.theta) * cos(bookmark.orbit.phi);
-        Base::mEye = mPivot + vec3(x, y, z) * abs(bookmark.orbit.distance);
-        mFlipped = bookmark.orbit.distance < 0;
-        Base::mTarget = Base::mEye + vec3(x, y, z) * (mFlipped ? 1.0 : -1.0);
-    }
+  void jumpToBookmark(const Bookmark& bookmark) override {
+    mPivot = bookmark.orbit.pivot;
+    const FLOAT x = sin(bookmark.orbit.theta) * cos(bookmark.orbit.phi);
+    const FLOAT y = sin(bookmark.orbit.phi);
+    const FLOAT z = cos(bookmark.orbit.theta) * cos(bookmark.orbit.phi);
+    Base::mEye = mPivot + vec3(x, y, z) * abs(bookmark.orbit.distance);
+    mFlipped = bookmark.orbit.distance < 0;
+    Base::mTarget = Base::mEye + vec3(x, y, z) * (mFlipped ? 1.0 : -1.0);
+  }
 
-private:
-    GrabState mGrabState = INACTIVE;
-    bool mFlipped = false;
-    vec3 mGrabPivot;
-    vec3 mGrabScene;
-    vec3 mGrabFar;
-    vec3 mGrabEye;
-    vec3 mGrabTarget;
-    Bookmark mGrabBookmark;
-    int mGrabWinX;
-    int mGrabWinY;
-    vec3 mPivot;
+ private:
+  GrabState mGrabState = INACTIVE;
+  bool mFlipped = false;
+  vec3 mGrabPivot;
+  vec3 mGrabScene;
+  vec3 mGrabFar;
+  vec3 mGrabEye;
+  vec3 mGrabTarget;
+  Bookmark mGrabBookmark;
+  int mGrabWinX;
+  int mGrabWinY;
+  vec3 mPivot;
 };
 
-} // namespace camutils
-} // namespace filament
+}  // namespace camutils
+}  // namespace filament
 
 #endif /* CAMUTILS_ORBIT_MANIPULATOR_H */
